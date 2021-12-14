@@ -5,7 +5,7 @@ For mobile:
  web based assembly mips compiler
 https://rivoire.cs.sonoma.edu/cs351/wemips/
 
-Mobile code editor for IOS with hit integration
+Mobile code editor for IOS with Git integration
 Working Copy
 
 
