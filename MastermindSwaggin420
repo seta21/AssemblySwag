@@ -1,0 +1,84 @@
+.data
+
+    space:         .asciiz " "
+    Newline:       .asciiz "\n"
+    Cores:         .asciiz "BGRYWO" #Max 6 no rand / Maximum 6 on random
+    Tabuleiro:     .space 40
+    		   .align 2	
+    Combo:         .space 16
+    Rand_Combo:    .byte 1
+    End_Combo:     .byte 1	
+    Mensagem1:	   .asciiz  "Faça a sua jogada\n" #it translates to "make your play/move"
+    Exit: 	   .asciiz "e"
+    
+    
+    
+.text
+
+    #$s0 -> endereço da combinação aleatória    # adress of the random combination   
+    #$s1 -> endereço do tabuleiro        	# adress of the board
+    #$s2 -> número de tentativas do jogador     # number of attempts of the player   
+    #$s3 -> número de cores erradas             # number of wrong colors
+    #$s4 -> número de cores iguais              # number of right colors
+    #$s5 -> número de posições iguais           # number of right positions
+         
+##############################################################################################################         
+         
+main: 
+
+Rand_Combo_Func:
+    
+    la $t1,Cores     # t1 fica com o endereço das cores # t1 holds the color adress
+    la $t2,Combo    # t2 fica com o endereço da combinação # t2 holds the random adress
+    li $t0,0    # o I (incremento)	# i++
+    
+Loop:
+        
+    beq $t0, 4, END_LOOP    # if (i == 4) end
+    
+    li $a1,6        # define o limite superior de numeros a ser gerados de 0 a 5 # sets upper bound 0-5
+    li $v0,42        # rand int range
+    syscall
+    
+    add $t1,$t1,$a0        # t1 tem o endereço das cores e adiciona-se o numero gerado aleatoriamente
+    			   # t1 has the color adress and adds the random number that was generated
+    lb $t3,0($t1)        # fica guardado em t3 a cor gerada aleatoriamente 
+    		         # t3 holds the random color generated 
+    sb $t3,0($t2)        # fica guardado em t2 a cor do t3
+    			 # the color on t2 gets saved in t3
+    sub $t1,$t1,$a0        # dá reset ao t1
+    			   # resets t1
+    
+    addi $t2,$t2,1        # incrementa o valor de endereço de combo de modo a gravar a seguinte posição
+    			  # adds the adress value of the combo in a way that saves the next position
+    addi $t0,$t0,1        # incrementa o i # i++
+    
+    j Loop
+    
+ END_LOOP:
+ 
+ #Objective now is to compare the string that the User typed, with the random one
+ #lb one of the $t's to compare them 1 by 1, but this is the part I honestly have no idea
+ #how to do
+
+ Func_Jogada:
+      
+	la $a0,Mensagem1
+	li $v0,4
+	syscall  
+	
+	li $v0,8
+	syscall
+				
+	la      $a0,Exit                     # obter o endereço da label Exit
+					     # get label adress Exit
+    	lb      $a0,($a0)                    # obter o valor do Exit
+    					     # get value of Exit
+  	lb      $t2,($t2)                    # obter o primeiro char da string
+  					     # get the frist char of the string
+    	beq     $t2,$a0,Exit2		     # se o utilizador premir "e" sai do programa
+    					     # if user presses "e" the program exits
+	
+Exit2:	
+	li $v0,10
+	syscall				     # end of the program
