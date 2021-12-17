@@ -1,0 +1,398 @@
+		# modified game of MasterMind
+		# 	Written by Yasmin Alvarado-Rayo		
+	
+        .data
+        .align  2
+fermi:	.asciiz	"Fermi " # um está na posição certa
+pico:	.asciiz	"Pico "	 # cor certa posição errada
+bagel:	.asciiz	"Bagel " # posição e cor errada
+space:	.asciiz	"\n"
+welcome:.asciiz	"Hi, welcome to the game of MasterMind. Your opponent randomly selected a unique 4 digit number and you have to guess it! Go! You must enter a unique 4 digit number:"
+won:	.asciiz	"\nYou have guessed correctly, congratulations! Game over."
+quit:	.asciiz "\nYou have quit. Game over."
+result:	.asciiz	"\nThe number of guesses you did was "
+correct:.asciiz "\nThe correct 4 digit number was "
+#--------------- Usual stuff at beginning of main -----------------
+        .text
+       .globl main
+main:
+		##------ computer randomly selects a unique 4 digit number
+		jal 	generateUniqueRandom
+    		move 	$s0, 	$v0			# s0: stores random target number
+    		move 	$s5, 	$0			# s5: guesses count = 0
+    	
+nextGuess:   	move 	$s2, 	$0			# s2: fermi count = 0
+		move 	$s3, 	$0			# s3: pico count = 0		
+    		move 	$s4, 	$0			# s4: bagel count = 0
+   	
+		#------ prompt user to enter a unique 4 digit number
+redoUserInput:	li	$v0,	51
+		la	$a0,	welcome			# a0 stores the n value (input from user)
+		syscall
+		move	$s1,	$a0			# s1: stores user number
+		beq	$s1,	0,	endGameQuit	# if user entered 0000, end game
+		jal	unique				# make sure user input is unique
+		beq	$v0,	0,	redoUserInput	# if not unique, redo
+		move	$a0,	$s1			# a0: s1: stores user number
+		move	$a1,	$s0			# a1: s0: stores target number
+		jal	analyzeFermi			# find fermi count
+		move	$s2,	$v0			# s2: fermi count = returned
+		
+		#------ show results for fermi
+		move	$s6,	$s2			# s6 = fermi count
+loopFermi:	beq	$s6, 	0,	noMoreFermi	# if fermi count == 0, don't print fermi
+		la	$a0,	fermi			# display fermi text
+		li	$v0,	4		
+		syscall
+		addi	$s6,	$s6,	-1		# s6: fermi count --
+		j	loopFermi			# recheck if fermi == 0
+		
+noMoreFermi:	move	$a0,	$s1			# a0: s1: stores user number
+		move	$a1,	$s0			# a1: s0: stores target number
+		jal	analyzePico			# find pico count
+		move	$s3,	$v0			# s3: pico count = returned
+		
+		#------ show results for pico
+		move	$s6,	$s3			# s6 = pico count
+loopPico:	beq	$s6, 	0,	noMorePico	# if pico count == 0, don't print pico
+		la	$a0,	pico			# display pico text
+		li	$v0,	4
+		syscall
+		addi	$s6,	$s6,	-1		# s6: pico count --
+		j	loopPico			# recheck if pico == 0
+		
+noMorePico:	move	$a0,	$s3			# a0: s3 = pico count
+		move	$a1,	$s2			# a1: s2 = fermi count
+		jal	analyzeBagel			# check if bagel count
+		move	$s4,	$v0			# s4: v0 = bagel result
+		#------ show results for bagel
+		bne	$s4, 	1,	noBagel		# if bagel count != 1, don't print bagel
+		la	$a0,	bagel			# display bagel text
+		li	$v0,	4
+		syscall
+		
+noBagel:	la	$a0,	space			# space for next time
+		li	$v0,	4
+		syscall
+		
+		beq	$s2,	4,	notAGuess	# if all four fermis, do not add to guess count
+		addi	$s5,	$s5,	1		# s5: guesses = guesses + 1
+		
+notAGuess:	blt	$s2,	4,	nextGuess	# if not all fermis (correct guess), guess again
+		
+		#------ Won Game: display that the user won and the number of guesses
+		la	$a0,	won			# display won text
+		li	$v0,	4
+		syscall
+		la	$a0,	result			# display result text
+		li	$v0,	4
+		syscall
+		move	$a0,	$s5			# display guesses count
+		li	$v0,	1
+		syscall
+		j	final
+		
+		#------ Quit Game, display that the user quit, the number of guesses, and the correct answer
+endGameQuit:	la	$a0,	quit			# display quit text
+		li	$v0,	4
+		syscall
+		la	$a0,	result			# display result text
+		li	$v0,	4
+		syscall
+		move	$a0,	$s5			# display guesses count
+		li	$v0,	1
+		syscall
+		la	$a0,	correct			# display correct text
+		li	$v0,	4
+		syscall
+		move	$a0,	$s0			# display random computer number, target
+		li	$v0,	1
+		syscall
+		j	final
+#----------------- Usual stuff at end of main ---------------------
+final:        	li	$v0, 	10			# TTFN
+		syscall
+#******************************************************************
+
+#******************************************************************
+		# generate unique random number function - the computer creates a ramdom number and checks to make sure its unique before returning it
+		#
+		#v0 - random 4 digit number
+
+generateUniqueRandom:
+#--------------- Usual stuff at function beginning  ---------------
+        	addi    	$sp, 	$sp, 	-12	# allocate stack space for values
+        	sw		$ra,	8($sp)		# store off the return addr, etc 
+        	sw		$s0, 	4($sp)
+        	sw		$s1,	($sp)
+
+#-------------------------- function body -------------------------
+tryAgain:	li 		$a1, 	10000		# a1: max the random number cannot be, 1000
+   	 	li 		$v0, 	42  		# v0 generates the random number
+    		syscall					# a0 : random number
+    		bge		$a0,	999,	doNotAdd# if random number > 999, don't add 1000
+    		addi		$a0,	$a0,	1000	# random number = random number + 1000
+doNotAdd:   	move		$s0,	$a0		# s0 : random number
+    		jal		unique			# check uniqueness
+    		beq		$v0,	$0,	tryAgain# if not unique, try to find another	
+		move		$v0,	$s0		#v0: unique random number
+#----------------------- Return random integer so far ------------------	
+        	lw  		$ra, 	8($sp)        	# restore the return address and
+        	lw		$s0, 	4($sp)		# other used registers...  
+        	lw		$s1,	($sp)     
+        	addi		$sp, 	$sp,	12
+        	jr      	$ra               	# return to the calling function
+#******************************************************************
+
+#******************************************************************
+		# unique function - checks to see if the number passed is unique
+		#
+		# a0 - number to analyze uniqueness of 4 digits
+		#
+		# v0 - return 0 if not unique, 1 if unique
+
+unique:
+#--------------- Usual stuff at function beginning  ---------------
+        	addi    	$sp, 	$sp, 	-16	# allocate stack space for values
+        	sw		$ra,	12($sp)		# store off the return addr, etc 
+        	sw		$s1, 	8($sp)
+        	sw		$s2,	4($sp)
+        	sw		$s3,	($sp)
+
+#-------------------------- function body -------------------------
+		li		$t0, 	1		# t0 : result = unique (1)
+		# isolate thousandth place digit
+		li		$s1, 	1000		# s1 = 1000
+		div		$a0,	$s1		# number passed / 1000
+		mflo		$t1			# t1 = quotient result (thousand's place value)
+		mfhi		$a0			# a0 = remainder
+		# isolate hundredth place digit
+		li		$s2, 	100		# s2 = 100
+		div		$a0,	$s2		# remainder / 100
+		mflo		$t2			# t2 = quotient result (hundred's place value)
+		mfhi		$a0			# a0 = remainder
+		# isolate tenth place digit
+		li		$s3, 	10		# s3 = 10
+		div		$a0,	$s3		# remainder / 10
+		mflo		$t3			# t3 = quotient result	(ten's place value)
+		# isolate oneth place digit
+		mfhi		$a0			# a0 = remainder (one's place value)
+		#start checking for uniqueness
+		beq		$t1, 	$t2,	notUnique 	# if thousand's place == hundred's place, it's not unique
+		beq		$t1, 	$t3,	notUnique 	# if thousand's place == tens's place, it's not unique
+		beq		$t1, 	$a0,	notUnique 	# if thousand's place == one's place, it's not unique
+		beq		$t2, 	$t3,	notUnique 	# if hundred's place == tens's place, it's not unique
+		beq		$t2, 	$a0,	notUnique 	# if hundred's place == one's place, it's not unique
+		beq		$t3, 	$a0,	notUnique 	# if ten's place == one's place, it's not unique
+		j 		done
+	
+notUnique:	li		$t0,	0		# t0 : result = not unique (0)
+		j 		done
+	
+done:		move		$v0,	$t0		# v0: returns result (t0)
+#----------------------- Return result of uniqueness ------------------	
+        	lw  		$ra, 	12($sp)        	# restore the return address and
+        	lw		$s1, 	8($sp)		# other used registers...  
+        	lw		$s2,	4($sp)   
+        	lw		$s3,	($sp)    
+        	addi		$sp, 	$sp,	16
+        	jr      	$ra                	# return to the calling function
+#******************************************************************
+
+#******************************************************************
+		# analyze fermi function - For each digit in the guess that appears in the target in the same place
+		# 			in both the target and guess, add to fermi count and then return fermi count
+		#
+		# a0 - user's guessed integer
+		#
+		# a1 -random integer that computer stored, target
+		#
+		# v0 - return amount of fermis
+
+analyzeFermi:
+#--------------- Usual stuff at function beginning  ---------------
+        	addi    	$sp, 	$sp, 	-16	# allocate stack space for values
+        	sw		$ra,	12($sp)		# store off the return addr, etc 
+        	sw		$s1, 	8($sp)
+        	sw		$s2,	4($sp)
+        	sw		$s3,	($sp)
+
+#-------------------------- function body -------------------------
+		li		$t0, 	0		# t0 : fermi count = 0
+		# isolate thousandth place digit of user
+		li		$s1, 	1000		# s1 = 1000
+		div		$a0,	$s1		# number passed of user / 1000
+		mflo		$t1			# t1 = quotient result (thousand's place value of user)
+		mfhi		$a0			# a0 = remainder of user value
+		# isolate thousandth place digit of target
+		div		$a1,	$s1		# number passed of target / 1000
+		mflo		$t4			# t4 = quotient result (thousand's place value of target)
+		mfhi		$a1			# a1 = remainder of target value
+		# isolate hundredth place digit of user
+		li		$s2, 	100		# s2 = 100
+		div		$a0,	$s2		# remainder of user value / 100
+		mflo		$t2			# t2 = quotient result (hundred's place value of user)
+		mfhi		$a0			# a0 = remainder of user value
+		# isolate hundredth place digit of target
+		div		$a1,	$s2		# remainder of target value / 100
+		mflo		$t5			# t5 = quotient result (hundred's place value of target)
+		mfhi		$a1			# a1 = remainder of target value
+		# isolate tenth place digit of user
+		li		$s3, 	10		# s3 = 10
+		div		$a0,	$s3		# remainder of user value / 10
+		mflo		$t3			# t3 = quotient result (ten's place value of user)
+		# isolate oneth place digit of user
+		mfhi		$a0			# a0 = quotient result (one's place value of user)
+		# isolate tenth place digit of target
+		div		$a1,	$s3		# remainder of target value / 10
+		mflo		$t6			# t6 = quotient result (ten's place value of target)
+		# isolate oneth place digit of target
+		mfhi		$a1			# a1 = quotient result (one's place value of target)
+		#start checking for fermis
+		bne		$a0, 	$a1,	noOneSame 	# if user's one's place != target's one's place, no fermi
+		addi		$t0,	$t0,	1		# t0 : fermi count ++
+
+noOneSame:	bne		$t3, 	$t6,	noTenSame 	# if user's ten's place != target's ten's place, no fermi
+		addi		$t0,	$t0,	1		# t0 : fermi count ++
+
+noTenSame:	bne		$t2, 	$t5,	noHundredSame 	# if user's hundred's place != target's hundred's place, no fermi
+		addi		$t0,	$t0,	1		# t0 : fermi count ++
+
+noHundredSame:	bne		$t1, 	$t4,	noThousandSame  # if user's thousand's place != target's thousand's place, no fermi
+		addi		$t0,	$t0,	1		# t0 : fermi count ++
+
+noThousandSame:	move		$v0,	$t0			# v0: returns t0 = final fermi count
+#----------------------- Return result of fermi ------------------	
+        	lw  		$ra, 	12($sp)        	# restore the return address and
+        	lw		$s1, 	8($sp)		# other used registers...  
+        	lw		$s2,	4($sp)   
+        	lw		$s3,	($sp)    
+        	addi		$sp, 	$sp,	16
+        	jr      	$ra                	# return to the calling function
+#******************************************************************
+
+
+#******************************************************************
+		# analyze pico function - For each digit in the guess that appears in the target 
+		#			but in a different position, add to pico count and then return pico count
+		#
+		# a0 - user's guessed integer
+		#
+		# a1 -random integer that computer stored
+		#
+		# v0 - return amount of picos
+
+analyzePico:
+#--------------- Usual stuff at function beginning  ---------------
+        	addi    	$sp, 	$sp, 	-16	# allocate stack space for values
+        	sw		$ra,	12($sp)		# store off the return addr, etc 
+        	sw		$s1, 	8($sp)
+        	sw		$s2,	4($sp)
+        	sw		$s3,	($sp)
+
+#-------------------------- function body -------------------------
+		li		$t0, 	0		# t0 : pico count = 0
+		# isolate thousandth place digit of user
+		li		$s1, 	1000		# s1 = 1000
+		div		$a0,	$s1		# number passed of user / 1000
+		mflo		$t1			# t1 = quotient result (thousand's place value of user)
+		mfhi		$a0			# a0 = remainder of user value
+		# isolate thousandth place digit of target
+		div		$a1,	$s1		# number passed of target / 1000
+		mflo		$t4			# t4 = quotient result (thousand's place value of target)
+		mfhi		$a1			# a1 = remainder of target value
+		# isolate hundredth place digit of user
+		li		$s2, 	100		# s2 = 100
+		div		$a0,	$s2		# remainder of user value / 100
+		mflo		$t2			# t2 = quotient result (hundred's place value of user)
+		mfhi		$a0			# a0 = remainder of user value
+		# isolate hundredth place digit of target
+		div		$a1,	$s2		# remainder of target value / 100
+		mflo		$t5			# t5 = quotient result (hundred's place value of target)
+		mfhi		$a1			# a1 = remainder of target value
+		# isolate tenth place digit of user
+		li		$s3, 	10		# s3 = 10
+		div		$a0,	$s3		# remainder of user value / 10
+		mflo		$t3			# t3 = quotient result (ten's place value of user)
+		# isolate oneth place digit of user
+		mfhi		$a0			# a0 = quotient result (one's place value of user)
+		# isolate tenth place digit of target
+		div		$a1,	$s3		# remainder of target value / 10
+		mflo		$t6			# t6 = quotient result (ten's place value of target)
+		# isolate oneth place digit of target
+		mfhi		$a1			# a1 = quotient result (one's place value of target)
+		#start checking for picos
+		bne		$a0, 	$t6,	no1to10		# if user's one's place != target's ten's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no1to10:	bne		$a0, 	$t5,	no1to100	# if user's one's place != target's hundred's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no1to100:	bne		$a0, 	$t4,	no1to1000	# if user's one's place != target's thousand's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no1to1000:	bne		$t3, 	$a1,	no10to1		# if user's ten's place != target's one's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no10to1:	bne		$t3, 	$t5,	no10to100	# if user's ten's place != target's hundred's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no10to100:	bne		$t3, 	$t4,	no10to1000	# if user's ten's place != target's thousand's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no10to1000:	bne		$t2, 	$a1,	no100to1	# if user's hundred's place != target's one's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no100to1:	bne		$t2, 	$t6,	no100to10	# if user's hundred's place != target's ten's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no100to10:	bne		$t2, 	$t4,	no100to1000	# if user's hundred's place != target's thousand's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no100to1000:	bne		$t1, 	$a1,	no1000to1	# if user's thousand's place != target's one's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no1000to1:	bne		$t1, 	$t6,	no1000to10	# if user's thousand's place != target's ten's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no1000to10:	bne		$t1, 	$t5,	no1000to100	# if user's thousand's place != target's hundred's place, no pico
+		addi		$t0,	$t0,	1		# t0 : pico count ++
+
+no1000to100:	move		$v0,	$t0		# v0: returns t0 = final pico count	
+#----------------------- Return result of pico ------------------	
+        	lw  		$ra, 	12($sp)        	# restore the return address and
+        	lw		$s1, 	8($sp)		# other used registers...  
+        	lw		$s2,	4($sp)   
+        	lw		$s3,	($sp)    
+        	addi		$sp, 	$sp,	16
+        	jr      	$ra                	# return to the calling function
+#******************************************************************
+
+#******************************************************************
+		# analyze bagel function - if no picos and fermis were found, bagel (1) should be returned. else, no bagel (0)
+		#
+		# a0 - number of picos
+		#
+		# a1 -number of fermis
+		#
+		# v0 - return 0 if no bagel, 1 if bagel
+
+analyzeBagel:
+#--------------- Usual stuff at function beginning  ---------------
+        	addi    	$sp, 	$sp, 	-4	# allocate stack space for 1 value
+        	sw		$ra,	($sp)		# store off the return addr
+
+#-------------------------- function body -------------------------
+		li		$t0,	1		# t0: 1, bagel
+		bgtz		$a0,	notABagel 	# check if 0 picos
+		bgtz		$a1,	notABagel 	# check if 0 fermis	
+		j 		doneBagel
+		
+notABagel:	li		$t0,	0		# t0: 0, no bagel
+
+doneBagel:	move		$v0,	$t0		# v0: t0 result
+#----------------------- Return bagel result ------------------	
+        	lw  		$ra, 	($sp)        	# restore the return address   
+        	addi		$sp, 	$sp,	4
+        	jr      	$ra                	# return to the calling function
+#******************************************************************
